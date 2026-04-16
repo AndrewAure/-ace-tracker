@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="ACE" />
+  <meta name="theme-color" content="#080808" />
+  <title>ACE Tracker</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    body { background: #080808; color: #f0ede8; font-family: Georgia, serif; overscroll-behavior: none; }
+    input, select, textarea, button { font-family: Georgia, serif; }
+    ::-webkit-scrollbar { display: none; }
+    @keyframes fadeUp {
+      0% { opacity: 0; transform: translateX(-50%) translateY(0); }
+      20% { opacity: 1; transform: translateX(-50%) translateY(-10px); }
+      80% { opacity: 1; transform: translateX(-50%) translateY(-10px); }
+      100% { opacity: 0; transform: translateX(-50%) translateY(-30px); }
+    }
+    .xp-anim { animation: fadeUp 3s ease forwards; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+const storage = {
+  async get(key) {
+    const value = localStorage.getItem(key);
+    return value == null ? null : { value };
+  },
+  async set(key, value) {
+    localStorage.setItem(key, value);
+  },
+};
+
+const MORNING_QUOTES = [
+  "The secret of getting ahead is getting started.",
+  "Every champion was once a contender that refused to give up.",
+  "180 lbs is not a destination. It is a decision made daily.",
+  "The cut is temporary. The version you are building is permanent.",
+  "Show up before you feel ready. Feeling ready is a lie.",
+  "Your future self is watching every choice you make right now.",
+  "Momentum is built one closed loop at a time.",
+  "You do not get what you wish for. You get what you work for.",
+  "One more rep. One more round. One more day.",
+  "The body achieves what the mind believes.",
+];
+
+const GOGGINS_QUOTES = [
+  "Don't stop when you're tired. Stop when you're done.",
+  "Unless something extreme has happened - what must be logged must be locked.",
+  "Nobody is going to come and save you. You've got to save yourself.",
+  "Callous your mind the same way you callous your hands.",
+  "Stop making excuses. Log it. Lock it. Move on.",
+  "The only way you gain mental toughness is to do things you're not happy doing.",
+  "Suffering is the true test of life. Embrace it.",
+];
+
+const RANKS = [
+  { id:"civilian", title:"Civilian", xpRequired:0, emoji:"🚶", glowColor:"#555", description:"You haven't started yet. The first step is the hardest one you'll ever take.", nextHint:"Show up. That's it." },
+  { id:"recruit", title:"Recruit", xpRequired:100, emoji:"🎯", glowColor:"#a08060", description:"You showed up. The habits are fragile but they exist. Keep asking.", nextHint:"Build the streak. Consistency over intensity." },
+  { id:"trainee", title:"Trainee", xpRequired:300, emoji:"⚙️", glowColor:"#60a080", description:"The habit is forming. You are showing up when you do not feel like it.", nextHint:"Lock in the nutrition." },
+  { id:"fighter", title:"Fighter", xpRequired:700, emoji:"🥊", glowColor:"#6080c0", description:"You take it seriously now. Missing a session bothers you. The weight is moving.", nextHint:"Push your limits. Add weight. Add rounds." },
+  { id:"contender", title:"Contender", xpRequired:1500, emoji:"⚔️", glowColor:"#c09040", description:"The results are undeniable. The work is becoming identity.", nextHint:"Do not get comfortable. Comfortable is where progress dies." },
+  { id:"warrior", title:"Warrior", xpRequired:3000, emoji:"🛡️", glowColor:"#cc4444", description:"Forged by the process. You came back every time.", nextHint:"The final push. This is where most people stop." },
+  { id:"champion", title:"Champion", xpRequired:5000, emoji:"🏆", glowColor:"#cccc44", description:"Elite consistency. The habits are who you are.", nextHint:"One rank left. Finish what you started." },
+  { id:"king", title:"King", xpRequired:8000, emoji:"👑", glowColor:"#ffd700", description:"The cut is complete. 180-190 lbs. You built something real.", nextHint:"You made it. Now build the next version." },
+];
+
+const BARS = [
+  { id:"barbell", label:"Barbell", weight:45 },
+  { id:"hex", label:"Hex Bar", weight:60 },
+  { id:"ez", label:"EZ Bar", weight:25 },
+  { id:"none", label:"No Bar / Machine / DBs", weight:0 },
+];
+
+const PLATES = [
+  { label:"45", weight:45 },
+  { label:"35", weight:35 },
+  { label:"25", weight:25 },
+  { label:"10", weight:10 },
+  { label:"5", weight:5 },
+  { label:"2.5", weight:2.5 },
+];
+
+const STRENGTH_HISTORY = {
+  "Incline Bench Press (Barbell)": { first:{date:"2023-03-13",weight:45,reps:12}, peak:{date:"2024-01-15",weight:205,reps:5}, current:185 },
+  "Squat (Barbell)": { first:{date:"2023-03-01",weight:135,reps:20}, peak:{date:"2024-05-08",weight:315,reps:3}, current:295 },
+  "Deadlift (Barbell)": { first:{date:"2023-07-29",weight:135,reps:12}, peak:{date:"2024-12-04",weight:315,reps:5}, current:275 },
+  "Romanian Deadlift (Barbell)": { first:{date:"2023-03-01",weight:90,reps:12}, peak:{date:"2023-07-19",weight:225,reps:10}, current:225 },
+  "Pendlay Row (Barbell)": { first:{date:"2026-02-22",weight:155,reps:12}, peak:{date:"2026-03-21",weight:165,reps:8}, current:165 },
+  "Bulgarian Split Squat": { first:{date:"2023-10-17",weight:35,reps:23}, peak:{date:"2025-06-04",weight:60,reps:7}, current:50 },
+  "Seated Overhead Press (Dumbbell)": { first:{date:"2023-06-22",weight:40,reps:20}, peak:{date:"2026-02-01",weight:60,reps:8}, current:60 },
+};
+
+const PROGRAM_WORKOUTS = [
+  {
+    id:"push", name:"Push", type:"lift", days:[2], emoji:"🏋️",
+    exercises:[
+      { id:"incline_bench", name:"Incline Bench Press (Barbell)", muscle:"Chest", sets:4, targetReps:8, bar:"barbell", lastWeight:185 },
+      { id:"db_shoulder", name:"Seated Overhead Press (Dumbbell)", muscle:"Shoulders", sets:3, targetReps:8, bar:"none", lastWeight:60 },
+      { id:"chest_dip", name:"Chest Dip", muscle:"Chest / Triceps", sets:3, targetReps:10, bar:"none", lastWeight:25 },
+      { id:"cable_cross", name:"Cable Crossover", muscle:"Chest", sets:3, targetReps:12, bar:"none", lastWeight:27.5 },
+      { id:"lat_raise", name:"Lateral Raise (Dumbbell)", muscle:"Shoulders", sets:3, targetReps:12, bar:"none", lastWeight:27.5 },
+      { id:"tri_push", name:"Triceps Pushdown (Cable)", muscle:"Triceps", sets:3, targetReps:12, bar:"none", lastWeight:80 },
+    ],
+  },
+  {
+    id:"lower", name:"Lower", type:"lift", days:[4], emoji:"🏋️",
+    exercises:[
+      { id:"squat", name:"Squat (Barbell)", muscle:"Quads / Glutes", sets:3, targetReps:6, bar:"barbell", lastWeight:295 },
+      { id:"rdl", name:"Romanian Deadlift (Barbell)", muscle:"Hamstrings / Glutes", sets:2, targetReps:8, bar:"barbell", lastWeight:225 },
+      { id:"bss", name:"Bulgarian Split Squat", muscle:"Quads / Glutes", sets:3, targetReps:10, bar:"none", lastWeight:50 },
+      { id:"abductor", name:"Hip Abductor Machine", muscle:"Glute Medius", sets:3, targetReps:15, bar:"none", lastWeight:0 },
+      { id:"adductor", name:"Hip Adductor Machine", muscle:"Inner Thigh", sets:3, targetReps:15, bar:"none", lastWeight:0 },
+      { id:"leg_curl", name:"Seated Leg Curl (Machine)", muscle:"Hamstrings", sets:3, targetReps:12, bar:"none", lastWeight:110 },
+      { id:"calf", name:"Seated Calf Raise", muscle:"Calves", sets:3, targetReps:15, bar:"none", lastWeight:0 },
+      { id:"knee_raise", name:"Hanging Knee Raise", muscle:"Core", sets:3, targetReps:15, bar:"none", lastWeight:0 },
+    ],
+  },
+  {
+    id:"pull", name:"Pull", type:"lift", days:[6], emoji:"🏋️",
+    exercises:[
+      { id:"deadlift", name:"Deadlift (Barbell)", muscle:"Back / Glutes / Hamstrings", sets:3, targetReps:5, bar:"barbell", lastWeight:275 },
+      { id:"pullup", name:"Pull Up", muscle:"Lats / Back", sets:4, targetReps:6, bar:"none", lastWeight:0 },
+      { id:"pendlay", name:"Pendlay Row (Barbell)", muscle:"Mid Back / Lats", sets:3, targetReps:8, bar:"barbell", lastWeight:165 },
+      { id:"lat_pull", name:"Lat Pulldown (Cable)", muscle:"Lats", sets:2, targetReps:10, bar:"none", lastWeight:165 },
+      { id:"face_pull", name:"Face Pull (Cable)", muscle:"Rear Delts / Rotator Cuff", sets:3, targetReps:12, bar:"none", lastWeight:70 },
+      { id:"ez_curl", name:"Bicep Curl (Barbell)", muscle:"Biceps", sets:2, targetReps:10, bar:"none", lastWeight:70 },
+      { id:"ab_wheel", name:"Ab Wheel", muscle:"Core", sets:3, targetReps:10, bar:"none", lastWeight:0 },
+    ],
+  },
+  {
+    id:"core", name:"Core Stability", type:"lift", days:[2,4,6], emoji:"🧱",
+    note:"End of every lift day. Training the cylinder that protects your spine.",
+    exercises:[
+      { id:"dead_bug", name:"Dead Bug", muscle:"Deep Core", sets:3, targetReps:8, bar:"none", lastWeight:0, note:"Press lower back into floor throughout." },
+      { id:"pallof", name:"Pallof Press (Cable)", muscle:"Obliques / Anti-Rotation", sets:3, targetReps:10, bar:"none", lastWeight:25, note:"Resist rotation toward the cable. That resistance is the training." },
+      { id:"suitcase", name:"Suitcase Carry (Dumbbell)", muscle:"Lateral Core", sets:3, targetReps:20, bar:"none", lastWeight:50, note:"Walk 20 steps. Torso perfectly upright." },
+      { id:"plank_reach", name:"Plank with Reach", muscle:"Full Core", sets:3, targetReps:8, bar:"none", lastWeight:0, note:"Reach one arm forward, hold 2s. If hips rotate, reduce range." },
+    ],
+  },
+  {
+    id:"boxing_endurance", name:"Boxing - Endurance", type:"boxing", days:[1], emoji:"🥊",
+    rounds:8, workTime:180, restTime:60,
+    roundFocus:[
+      "Jab only - nonstop, stay relaxed. Shoulders loose.",
+      "1-2 nonstop - exhale on every single punch.",
+      "Hooks only - elbow level, hip turns the punch.",
+      "Body punches - bend knees to level, core rotates.",
+      "30s punches / 30s movement - alternate, stay light.",
+      "1-2-3 combinations - deliberate, feel the sequence.",
+      "Free flow - relax completely. No plan. Find your rhythm.",
+      "Freestyle - maximum effort. Sprint last 20 seconds.",
+    ],
+  },
+  {
+    id:"boxing_footwork", name:"Boxing - Footwork", type:"boxing", days:[3], emoji:"🥊",
+    rounds:7, workTime:180, restTime:60,
+    roundFocus:[
+      "Shadowboxing - footwork only, no punches.",
+      "Shadowboxing - footwork + jab.",
+      "Shadowboxing - 1-2 while moving.",
+      "Shadowboxing - add defensive slips.",
+      "Bag - move after every punch.",
+      "Bag - punch, step, punch.",
+      "Bag - freestyle movement. Never plant your feet.",
+    ],
+  },
+  {
+    id:"boxing_combos", name:"Boxing - Combinations", type:"boxing", days:[5], emoji:"🥊",
+    rounds:8, workTime:180, restTime:60,
+    roundFocus:[
+      "Shadowboxing - 1-2.",
+      "Shadowboxing - 1-2-3.",
+      "Shadowboxing - add defense after combo.",
+      "Bag - 1-2-3.",
+      "Bag - 1-2-3-2.",
+      "Bag - head to body combos.",
+      "Bag - slip + counter.",
+      "Bag - FREESTYLE. Leave nothing in the tank.",
+    ],
+  },
+];
+
+const HABITS = [
+  { id:"meal1", label:"Meal 1 (3pm)", icon:"🍗", days:"all", xp:15 },
+  { id:"meal2", label:"Meal 2 (6-7pm)", icon:"🥗", days:"all", xp:15 },
+  { id:"meal3", label:"Meal 3 (10-11pm)", icon:"🥣", days:"all", xp:15 },
+  { id:"protein", label:"Hit protein target", icon:"💪", days:"all", xp:20 },
+  { id:"steps", label:"10,000 steps", icon:"👟", days:"all", xp:20 },
+  { id:"water", label:"3L water", icon:"💧", days:"all", xp:10 },
+  { id:"sleep", label:"6-7+ hrs sleep", icon:"😴", days:"all", xp:15 },
+  { id:"mobility", label:"Mobility after session", icon:"🧘", days:"all", xp:15 },
+  { id:"foot_rehab", label:"Right foot rehab done", icon:"🦶", days:"all", xp:10 },
+  { id:"workout", label:"Lift session logged", icon:"🏋️", days:"lift", xp:30 },
+  { id:"boxing", label:"Boxing session logged", icon:"🥊", days:"boxing", xp:30 },
+];
+
+const SCHEDULE = { 0:"rest", 1:"boxing", 2:"lift", 3:"boxing", 4:"lift", 5:"boxing", 6:"lift" };
+const MISS_REASONS = ["Ran out of time","Forgot","Too tired","Travelling","Other"];
+
+function getTodayKey() { return new Date().toISOString().split("T")[0]; }
+function getWeekKeys() {
+  const keys=[], today=new Date();
+  for(let i=6;i>=0;i--){const d=new Date(today);d.setDate(today.getDate()-i);keys.push(d.toISOString().split("T")[0]);}
+  return keys;
+}
+function getRankForXP(xp){let r=RANKS[0];for(const rank of RANKS){if(xp>=rank.xpRequired)r=rank;}return r;}
+function getHabitsForDay(dow){const type=SCHEDULE[dow];return HABITS.filter(h=>h.days==="all"||h.days===type);}
+function calcXP(habits,log,streak){
+  let earned=0,missed=0;
+  for(const h of habits){if(log[h.id])earned+=h.xp;else missed++;}
+  const mult=streak>=14?3:streak>=7?2:1;
+  earned=Math.round(earned*mult);
+  if(missed>=2)earned=Math.max(0,earned-Math.pow(2,missed-1)*10);
+  return{earned,missed,mult};
+}
+function fmtTime(s){const m=Math.floor(s/60),sec=s%60;return m+":"+(sec<10?"0":"")+sec;}
+
+function BarCalc({exercise,onClose,onConfirm}){
+  const[selectedBar,setSelectedBar]=useState(BARS.find(b=>b.id===exercise.bar)||BARS[0]);
+  const[plateCounts,setPlateCounts]=useState({});
+  const total=selectedBar.weight+Object.entries(plateCounts).reduce((s,[w,c])=>s+parseFloat(w)*c*2,0);
+  function adj(w,d){setPlateCounts(p=>({...p,[w]:Math.max(0,(p[w]||0)+d)}));}
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"flex-end"}}>
+      <div style={{background:"#111",borderRadius:"16px 16px 0 0",padding:"24px 20px",width:"100%",maxWidth:"480px",margin:"0 auto"}}>
+        <div style={{fontSize:"11px",color:"#555",letterSpacing:"3px",textTransform:"uppercase",marginBottom:"6px"}}>Bar Calculator</div>
+        <div style={{fontSize:"15px",color:"#f0ede8",marginBottom:"16px"}}>{exercise.name}</div>
+        <div style={{display:"flex",gap:"6px",marginBottom:"16px",flexWrap:"wrap"}}>
+          {BARS.map(bar=>(
+            <button key={bar.id} onClick={()=>setSelectedBar(bar)} style={{padding:"6px 10px",borderRadius:"20px",border:"none",background:selectedBar.id===bar.id?"#f0ede8":"#1a1a1a",color:selectedBar.id===bar.id?"#000":"#666",fontSize:"11px",cursor:"pointer"}}>{bar.label} ({bar.weight})</button>
+          ))}
+        </div>
+        {selectedBar.id!=="none"&&(
+          <div style={{marginBottom:"16px"}}>
+            <div style={{fontSize:"10px",color:"#555",letterSpacing:"2px",textTransform:"uppercase",marginBottom:"8px"}}>Plates per side</div>
+            {PLATES.map(plate=>(
+              <div key={plate.weight} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 0",borderBottom:"1px solid #1a1a1a"}}>
+                <span style={{fontSize:"13px",color:"#c8c4be"}}>{plate.label} lb</span>
+                <div style={{display:"flex",alignItems:"center",gap:"14px"}}>
+                  <button onClick={()=>adj(plate.weight,-1)} style={{width:"28px",height:"28px",borderRadius:"50%",background:"#1a1a1a",border:"none",color:"#f0ede8",fontSize:"18px",cursor:"pointer",lineHeight:"1"}}>-</button>
+                  <span style={{fontSize:"15px",color:"#f0ede8",minWidth:"20px",textAlign:"center"}}>{plateCounts[plate.weight]||0}</span>
+                  <button onClick={()=>adj(plate.weight,1)} style={{width:"28px",height:"28px",borderRadius:"50%",background:"#1a1a1a",border:"none",color:"#f0ede8",fontSize:"18px",cursor:"pointer",lineHeight:"1"}}>+</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <div style={{background:"#1a1a1a",borderRadius:"10px",padding:"14px",textAlign:"center",marginBottom:"14px"}}>
+          <div style={{fontSize:"32px",fontWeight:"bold",color:"#f0ede8"}}>{total} lbs</div>
+          {selectedBar.id!=="none"&&<div style={{fontSize:"10px",color:"#444",marginTop:"2px"}}>{selectedBar.weight} bar + {(total-selectedBar.weight)/2} per side</div>}
+        </div>
+        <div style={{display:"flex",gap:"10px"}}>
+          <button onClick={onClose} style={{flex:1,padding:"12px",background:"#1a1a1a",border:"none",borderRadius:"8px",color:"#666",fontSize:"12px",cursor:"pointer"}}>Cancel</button>
+          <button onClick={()=>onConfirm(total)} style={{flex:2,padding:"12px",background:"#f0ede8",border:"none",borderRadius:"8px",color:"#000",fontSize:"12px",letterSpacing:"2px",textTransform:"uppercase",cursor:"pointer"}}>Use {total} lbs</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StrengthCard({exerciseName}){
+  const hist=STRENGTH_HISTORY[exerciseName];
+  if(!hist)return null;
+  const gained=hist.current-hist.first.weight;
+  const pct=Math.min(100,(hist.current/hist.peak.weight)*100);
+  return(
+    <div style={{background:"#0d0d0d",border:"1px solid #1a1a1a",borderRadius:"8px",padding:"10px 12px",marginBottom:"10px"}}>
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:"8px"}}>
+        <span style={{fontSize:"9px",color:"#555",letterSpacing:"2px",textTransform:"uppercase"}}>History</span>
+        <span style={{fontSize:"10px",color:"#00ff87"}}>+{gained} lbs since start</span>
+      </div>
+      <div style={{display:"flex",gap:"6px",marginBottom:"8px"}}>
+        {[{label:"Started",val:hist.first.weight+"lb"},{label:"Peak",val:hist.peak.weight+"lb"},{label:"Now",val:hist.current+"lb"}].map((s,i)=>(
+          <div key={i} style={{flex:1,textAlign:"center",background:"#161616",borderRadius:"6px",padding:"6px 4px"}}>
+            <div style={{fontSize:"13px",fontWeight:"bold",color:i===2?"#f0ede8":"#666"}}>{s.val}</div>
+            <div style={{fontSize:"8px",color:"#333",marginTop:"2px"}}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{height:"3px",background:"#1a1a1a",borderRadius:"2px",overflow:"hidden"}}>
+        <div style={{height:"100%",width:pct+"%",background:"#6080c0",borderRadius:"2px"}}/>
+      </div>
+    </div>
+  );
+}
+
+function RankCarousel({xp}){
+  const cur=getRankForXP(xp);
+  const curIdx=RANKS.findIndex(r=>r.id===cur.id);
+  const[activeIdx,setActiveIdx]=useState(curIdx);
+  const[flipped,setFlipped]=useState(false);
+  const[startX,setStartX]=useState(null);
+  const rank=RANKS[activeIdx];
+  const isUnlocked=activeIdx<=curIdx;
+  const isActive=activeIdx===curIdx;
+  const nextRank=RANKS[curIdx+1]||null;
+  const pct=nextRank?Math.min(100,((xp-cur.xpRequired)/(nextRank.xpRequired-cur.xpRequired))*100):100;
+  function swipe(dx){
+    if(Math.abs(dx)>40){setActiveIdx(p=>dx<0?(p+1)%RANKS.length:(p-1+RANKS.length)%RANKS.length);setFlipped(false);}
+    else setFlipped(f=>!f);
+  }
+  return(
+    <div style={{marginBottom:"18px"}}>
+      <div style={{display:"flex",justifyContent:"center",gap:"5px",marginBottom:"10px"}}>
+        {RANKS.map((r,i)=>(
+          <div key={r.id} onClick={()=>{setActiveIdx(i);setFlipped(false);}} style={{width:i===activeIdx?"14px":"5px",height:"5px",borderRadius:"3px",background:i<=curIdx?r.glowColor:"#222",cursor:"pointer",transition:"all 0.3s"}}/>
+        ))}
+      </div>
+      <div
+        onTouchStart={e=>setStartX(e.touches[0].clientX)}
+        onTouchEnd={e=>{swipe(e.changedTouches[0].clientX-startX);setStartX(null);}}
+        onMouseDown={e=>setStartX(e.clientX)}
+        onMouseUp={e=>{swipe(e.clientX-startX);setStartX(null);}}
+        style={{perspective:"1000px",cursor:"pointer",userSelect:"none"}}
+      >
+        <div style={{position:"relative",height:"155px",transformStyle:"preserve-3d",transform:flipped?"rotateY(180deg)":"rotateY(0deg)",transition:"transform 0.5s"}}>
+          <div style={{position:"absolute",inset:0,backfaceVisibility:"hidden",background:"#111",border:"1px solid "+(isActive?rank.glowColor:isUnlocked?"#333":"#181818"),borderRadius:"14px",padding:"16px",display:"flex",flexDirection:"column",justifyContent:"space-between",boxShadow:isActive?"0 0 18px "+rank.glowColor+"22":"none"}}>
+            <div style={{display:"flex",justifyContent:"space-between"}}>
+              <div>
+                <div style={{fontSize:"8px",color:isActive?rank.glowColor:"#333",letterSpacing:"3px",textTransform:"uppercase",marginBottom:"4px"}}>{isActive?"Current Rank":isUnlocked?"Unlocked":"Locked"}</div>
+                <div style={{fontSize:"22px",fontWeight:"bold",color:isUnlocked?"#f0ede8":"#2a2a2a"}}>{rank.title}</div>
+              </div>
+              <div style={{fontSize:"32px",opacity:isUnlocked?1:0.15}}>{rank.emoji}</div>
+            </div>
+            {isActive&&nextRank&&(
+              <div>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:"4px"}}>
+                  <span style={{fontSize:"9px",color:"#444"}}>{xp} XP</span>
+                  <span style={{fontSize:"9px",color:"#444"}}>{nextRank.xpRequired} XP - {nextRank.title}</span>
+                </div>
+                <div style={{height:"3px",background:"#1a1a1a",borderRadius:"2px",overflow:"hidden"}}>
+                  <div style={{height:"100%",width:pct+"%",background:rank.glowColor,transition:"width 0.5s"}}/>
+                </div>
+              </div>
+            )}
+            {!isUnlocked&&<div style={{fontSize:"10px",color:"#222"}}>Reach {rank.xpRequired} XP</div>}
+            <div style={{fontSize:"8px",color:"#2a2a2a",textAlign:"right"}}>Tap to flip - Swipe to browse</div>
+          </div>
+          <div style={{position:"absolute",inset:0,backfaceVisibility:"hidden",transform:"rotateY(180deg)",background:"#0e0e0e",border:"1px solid "+(isUnlocked?rank.glowColor:"#181818")+"33",borderRadius:"14px",padding:"16px",display:"flex",flexDirection:"column",justifyContent:"space-between"}}>
+            {isUnlocked?(
+              <>
+                <div>
+                  <div style={{fontSize:"9px",color:rank.glowColor,letterSpacing:"2px",textTransform:"uppercase",marginBottom:"6px"}}>{rank.emoji} {rank.title}</div>
+                  <div style={{fontSize:"12px",color:"#888",lineHeight:"1.6"}}>{rank.description}</div>
+                </div>
+                <div style={{fontSize:"10px",color:"#444",fontStyle:"italic",borderTop:"1px solid #1a1a1a",paddingTop:"8px"}}>Next: {rank.nextHint}</div>
+              </>
+            ):(
+              <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100%",gap:"8px"}}>
+                <div style={{fontSize:"28px"}}>🔒</div>
+                <div style={{fontSize:"13px",color:"#2a2a2a"}}>{rank.title}</div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LiftSession({workout,onComplete,onBack}){
+  const[sets,setSets]=useState(()=>workout.exercises.map(ex=>({...ex,completedSets:Array(ex.sets).fill(null).map(()=>({reps:ex.targetReps,weight:ex.lastWeight,rpe:7,done:false}))})));
+  const[activeExIdx,setActiveExIdx]=useState(0);
+  const[calcFor,setCalcFor]=useState(null);
+  const[restCountdown,setRestCountdown]=useState(0);
+  const[restActive,setRestActive]=useState(false);
+  const[sessionNote,setSessionNote]=useState("");
+  const[effort,setEffort]=useState(7);
+  const[startTime]=useState(Date.now());
+  const[finishing,setFinishing]=useState(false);
+  const timerRef=useRef(null);
+  useEffect(()=>()=>clearInterval(timerRef.current),[]);
+  function startRest(){
+    if(timerRef.current)clearInterval(timerRef.current);
+    setRestCountdown(90);setRestActive(true);
+    timerRef.current=setInterval(()=>{
+      setRestCountdown(p=>{if(p<=1){clearInterval(timerRef.current);setRestActive(false);return 0;}return p-1;});
+    },1000);
+  }
+  function logSet(ei,si,field,val){setSets(p=>p.map((ex,i)=>i!==ei?ex:{...ex,completedSets:ex.completedSets.map((s,j)=>j!==si?s:{...s,[field]:val})}));}
+  function completeSet(ei,si){
+    logSet(ei,si,"done",true);startRest();
+    const ex=sets[ei];
+    const nextSet=ex.completedSets.findIndex((s,j)=>j>si&&!s.done);
+    if(nextSet===-1){const nextEx=sets.findIndex((e,i)=>i>ei&&e.completedSets.some(s=>!s.done));if(nextEx!==-1)setTimeout(()=>setActiveExIdx(nextEx),200);}
+  }
+  function finish(){onComplete({workout,sets,note:sessionNote,effort,duration:Math.round((Date.now()-startTime)/1000),date:getTodayKey()});}
+  const activeEx=sets[activeExIdx];
+  if(finishing)return(
+    <div style={{padding:"24px 20px",maxWidth:"480px",margin:"0 auto"}}>
+      <div style={{fontSize:"11px",color:"#555",letterSpacing:"3px",textTransform:"uppercase",marginBottom:"20px"}}>Finish Session</div>
+      <div style={{background:"#111",borderRadius:"12px",padding:"18px",marginBottom:"18px",textAlign:"center"}}>
+        <div style={{fontSize:"34px",marginBottom:"6px"}}>💪</div>
+        <div style={{fontSize:"20px",fontWeight:"bold",color:"#f0ede8"}}>{workout.name}</div>
+        <div style={{fontSize:"12px",color:"#555",marginTop:"4px"}}>{fmtTime(Math.round((Date.now()-startTime)/1000))}</div>
+      </div>
+      <div style={{marginBottom:"14px"}}>
+        <div style={{fontSize:"10px",color:"#555",letterSpacing:"2px",textTransform:"uppercase",marginBottom:"8px"}}>Overall Effort</div>
+        <div style={{display:"flex",gap:"5px"}}>
+          {[1,2,3,4,5,6,7,8,9,10].map(n=>(
+            <button key={n} onClick={()=>setEffort(n)} style={{flex:1,padding:"8px 0",borderRadius:"6px",border:"none",background:effort===n?"#f0ede8":"#1a1a1a",color:effort===n?"#000":"#555",fontSize:"12px",cursor:"pointer"}}>{n}</button>
+          ))}
+        </div>
+      </div>
+      <textarea value={sessionNote} onChange={e=>setSessionNote(e.target.value)} placeholder="How did it feel? What needs work?" style={{width:"100%",background:"#111",border:"1px solid #222",borderRadius:"8px",padding:"10px",color:"#f0ede8",fontSize:"13px",outline:"none",resize:"none",minHeight:"80px",boxSizing:"border-box",marginBottom:"14px"}}/>
+      <button onClick={finish} style={{width:"100%",padding:"14px",background:"#00ff87",border:"none",borderRadius:"10px",color:"#000",fontSize:"12px",letterSpacing:"3px",textTransform:"uppercase",cursor:"pointer"}}>Save Session</button>
+    </div>
+  );
+  return(
+    <div style={{padding:"14px 16px",maxWidth:"480px",margin:"0 auto"}}>
+      {calcFor&&<BarCalc exercise={calcFor.ex} onClose={()=>setCalcFor(null)} onConfirm={w=>{logSet(calcFor.ei,calcFor.si,"weight",w);setCalcFor(null);}}/>}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"14px"}}>
+        <button onClick={onBack} style={{background:"none",border:"none",color:"#555",fontSize:"22px",cursor:"pointer",padding:"4px 8px"}}>←</button>
+        <div style={{fontSize:"13px",color:"#f0ede8"}}>{workout.name}</div>
+        <button onClick={()=>setFinishing(true)} style={{background:"none",border:"1px solid #333",borderRadius:"20px",color:"#888",fontSize:"11px",padding:"4px 10px",cursor:"pointer"}}>Finish</button>
+      </div>
+      {restActive&&(
+        <div style={{background:"#0d1a0d",border:"1px solid #1a3a1a",borderRadius:"10px",padding:"10px 14px",marginBottom:"12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <span style={{fontSize:"10px",color:"#60a080",letterSpacing:"2px",textTransform:"uppercase"}}>Rest</span>
+          <span style={{fontSize:"20px",fontWeight:"bold",color:"#60a080"}}>{fmtTime(restCountdown)}</span>
+          <button onClick={()=>{clearInterval(timerRef.current);setRestActive(false);}} style={{background:"none",border:"none",color:"#60a080",fontSize:"11px",cursor:"pointer"}}>Skip</button>
+        </div>
+      )}
+      {workout.note&&<div style={{fontSize:"11px",color:"#555",background:"#111",borderRadius:"8px",padding:"10px 12px",marginBottom:"12px",lineHeight:"1.5"}}>{workout.note}</div>}
+      <div style={{display:"flex",gap:"5px",overflowX:"auto",marginBottom:"14px",paddingBottom:"2px"}}>
+        {sets.map((ex,i)=>{
+          const done=ex.completedSets.every(s=>s.done);
+          return(
+            <button key={ex.id} onClick={()=>setActiveExIdx(i)} style={{padding:"5px 8px",borderRadius:"16px",border:"none",whiteSpace:"nowrap",background:i===activeExIdx?"#f0ede8":done?"#0d1a0d":"#1a1a1a",color:i===activeExIdx?"#000":done?"#60a080":"#555",fontSize:"10px",cursor:"pointer",flexShrink:0}}>
+              {done?"✓ ":""}{ex.name.split("(")[0].trim().split(" ").slice(0,2).join(" ")}
+            </button>
+          );
+        })}
+      </div>
+      <div style={{background:"#111",border:"1px solid #1a1a1a",borderRadius:"12px",padding:"14px",marginBottom:"14px"}}>
+        <div style={{fontSize:"13px",color:"#f0ede8",marginBottom:"2px"}}>{activeEx.name}</div>
+        <div style={{fontSize:"10px",color:"#555",marginBottom:"10px"}}>{activeEx.muscle}</div>
+        {activeEx.note&&<div style={{fontSize:"10px",color:"#444",background:"#161616",borderRadius:"6px",padding:"7px 10px",marginBottom:"10px",fontStyle:"italic"}}>{activeEx.note}</div>}
+        <StrengthCard exerciseName={activeEx.name}/>
+        {activeEx.completedSets.map((set,si)=>(
+          <div key={si} style={{display:"flex",alignItems:"center",gap:"7px",padding:"9px 0",borderBottom:"1px solid #161616",opacity:set.done?0.45:1}}>
+            <div style={{fontSize:"10px",color:"#444",width:"18px"}}>S{si+1}</div>
+            <button onClick={()=>!set.done&&setCalcFor({ex:activeEx,ei:activeExIdx,si})} style={{flex:1,padding:"7px",background:"#1a1a1a",border:"1px solid #222",borderRadius:"6px",color:"#f0ede8",fontSize:"12px",cursor:set.done?"default":"pointer",textAlign:"center"}}>
+              {set.weight>0?set.weight+"lb":"BW"}
+            </button>
+            <div style={{display:"flex",alignItems:"center",gap:"3px"}}>
+              <button onClick={()=>!set.done&&logSet(activeExIdx,si,"reps",Math.max(1,set.reps-1))} style={{width:"24px",height:"24px",borderRadius:"50%",background:"#1a1a1a",border:"none",color:"#888",fontSize:"16px",cursor:"pointer",lineHeight:"1"}}>-</button>
+              <span style={{fontSize:"13px",color:"#f0ede8",minWidth:"24px",textAlign:"center"}}>{set.reps}</span>
+              <button onClick={()=>!set.done&&logSet(activeExIdx,si,"reps",set.reps+1)} style={{width:"24px",height:"24px",borderRadius:"50%",background:"#1a1a1a",border:"none",color:"#888",fontSize:"16px",cursor:"pointer",lineHeight:"1"}}>+</button>
+            </div>
+            <select value={set.rpe} onChange={e=>!set.done&&logSet(activeExIdx,si,"rpe",parseInt(e.target.value))} style={{background:"#1a1a1a",border:"1px solid #222",borderRadius:"6px",color:"#888",fontSize:"10px",padding:"4px"}}>
+              {[1,2,3,4,5,6,7,8,9,10].map(n=><option key={n} value={n}>RPE{n}</option>)}
+            </select>
+            {!set.done?(
+              <button onClick={()=>completeSet(activeExIdx,si)} style={{width:"30px",height:"30px",borderRadius:"50%",background:"#1a1a1a",border:"1px solid #333",color:"#888",fontSize:"13px",cursor:"pointer"}}>✓</button>
+            ):(
+              <div style={{width:"30px",height:"30px",borderRadius:"50%",background:"#00ff87",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"13px",color:"#000"}}>✓</div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function BoxingSession({workout,onComplete,onBack}){
+  const[phase,setPhase]=useState("intro");
+  const[currentRound,setCurrentRound]=useState(0);
+  const[timeLeft,setTimeLeft]=useState(workout.workTime);
+  const[roundNotes,setRoundNotes]=useState(Array(workout.rounds).fill(null).map(()=>({effort:7,note:""})));
+  const[sessionNote,setSessionNote]=useState("");
+  const[startTime]=useState(Date.now());
+  const timerRef=useRef(null);
+  useEffect(()=>()=>clearInterval(timerRef.current),[]);
+  function tick(duration,nextPhase){
+    if(timerRef.current)clearInterval(timerRef.current);
+    setTimeLeft(duration);
+    timerRef.current=setInterval(()=>{setTimeLeft(p=>{if(p<=1){clearInterval(timerRef.current);setPhase(nextPhase);return 0;}return p-1;});},1000);
+  }
+  function startWork(){setPhase("work");tick(workout.workTime,"roundDone");}
+  function startRest(){setPhase("rest");tick(workout.restTime,"nextReady");}
+  function nextRound(){const n=currentRound+1;if(n>=workout.rounds){setPhase("done");return;}setCurrentRound(n);setPhase("intro");}
+  function updateNote(field,val){setRoundNotes(p=>p.map((r,i)=>i===currentRound?{...r,[field]:val}:r));}
+  function finish(){
+    const avgEffort=Math.round(roundNotes.reduce((s,r)=>s+r.effort,0)/workout.rounds);
+    onComplete({workout,roundNotes,note:sessionNote,duration:Math.round((Date.now()-startTime)/1000),totalWork:workout.rounds*workout.workTime,avgEffort,date:getTodayKey()});
+  }
+  const phaseColor=phase==="work"?"#cc4444":phase==="rest"?"#60a080":"#555";
+  const progress=phase==="work"?(timeLeft/workout.workTime)*100:phase==="rest"?(timeLeft/workout.restTime)*100:100;
+  if(phase==="done")return(
+    <div style={{padding:"24px 20px",maxWidth:"480px",margin:"0 auto"}}>
+      <div style={{fontSize:"11px",color:"#555",letterSpacing:"3px",textTransform:"uppercase",marginBottom:"18px"}}>Session Complete</div>
+      <div style={{background:"#111",borderRadius:"12px",padding:"18px",marginBottom:"18px",textAlign:"center"}}>
+        <div style={{fontSize:"34px",marginBottom:"6px"}}>🥊</div>
+        <div style={{fontSize:"20px",fontWeight:"bold",color:"#f0ede8"}}>{workout.name}</div>
+        <div style={{fontSize:"12px",color:"#555",marginTop:"4px"}}>{workout.rounds} rounds</div>
+      </div>
+      <textarea value={sessionNote} onChange={e=>setSessionNote(e.target.value)} placeholder="One thing better. One thing to fix." style={{width:"100%",background:"#111",border:"1px solid #222",borderRadius:"8px",padding:"10px",color:"#f0ede8",fontSize:"13px",outline:"none",resize:"none",minHeight:"70px",boxSizing:"border-box",marginBottom:"14px"}}/>
+      <button onClick={finish} style={{width:"100%",padding:"14px",background:"#00ff87",border:"none",borderRadius:"10px",color:"#000",fontSize:"12px",letterSpacing:"3px",textTransform:"uppercase",cursor:"pointer"}}>Save Session</button>
+    </div>
+  );
+  return(
+    <div style={{padding:"14px 16px",maxWidth:"480px",margin:"0 auto"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"18px"}}>
+        <button onClick={onBack} style={{background:"none",border:"none",color:"#555",fontSize:"22px",cursor:"pointer",padding:"4px 8px"}}>←</button>
+        <div style={{fontSize:"13px",color:"#f0ede8"}}>{workout.name}</div>
+        <div style={{fontSize:"11px",color:"#555"}}>R{currentRound+1}/{workout.rounds}</div>
+      </div>
+      <div style={{display:"flex",gap:"4px",marginBottom:"20px",justifyContent:"center"}}>
+        {Array(workout.rounds).fill(0).map((_,i)=>(
+          <div key={i} style={{width:i===currentRound?"14px":"5px",height:"5px",borderRadius:"3px",background:i<currentRound?"#00ff87":i===currentRound?phaseColor:"#1a1a1a",transition:"all 0.3s"}}/>
+        ))}
+      </div>
+      <div style={{textAlign:"center",marginBottom:"20px"}}>
+        <div style={{position:"relative",width:"170px",height:"170px",margin:"0 auto"}}>
+          <svg width="170" height="170" style={{position:"absolute",top:0,left:0,transform:"rotate(-90deg)"}}>
+            <circle cx="85" cy="85" r="75" fill="none" stroke="#1a1a1a" strokeWidth="7"/>
+            <circle cx="85" cy="85" r="75" fill="none" stroke={phaseColor} strokeWidth="7" strokeDasharray={String(2*Math.PI*75)} strokeDashoffset={String(2*Math.PI*75*(1-progress/100))} style={{transition:"stroke-dashoffset 1s linear"}}/>
+          </svg>
+          <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+            <div style={{fontSize:"8px",color:phaseColor,letterSpacing:"3px",textTransform:"uppercase"}}>{phase==="work"?"ROUND":phase==="rest"?"REST":phase==="roundDone"?"LOG IT":"READY"}</div>
+            <div style={{fontSize:"36px",fontWeight:"bold",color:"#f0ede8",lineHeight:"1.2"}}>{(phase==="work"||phase==="rest")?fmtTime(timeLeft):"GO"}</div>
+          </div>
+        </div>
+      </div>
+      <div style={{background:"#111",border:"1px solid #1a1a1a",borderRadius:"10px",padding:"12px 14px",marginBottom:"18px",textAlign:"center"}}>
+        <div style={{fontSize:"10px",color:"#555",marginBottom:"3px"}}>Round {currentRound+1} Focus</div>
+        <div style={{fontSize:"13px",color:"#c8c4be",lineHeight:"1.5"}}>{workout.roundFocus[currentRound]}</div>
+      </div>
+      {phase==="intro"&&<button onClick={startWork} style={{width:"100%",padding:"15px",background:"#cc4444",border:"none",borderRadius:"10px",color:"#fff",fontSize:"13px",letterSpacing:"3px",textTransform:"uppercase",cursor:"pointer"}}>Start Round {currentRound+1}</button>}
+      {phase==="work"&&<button onClick={()=>{clearInterval(timerRef.current);setPhase("roundDone");}} style={{width:"100%",padding:"13px",background:"#1a1a1a",border:"1px solid #333",borderRadius:"10px",color:"#888",fontSize:"12px",cursor:"pointer"}}>End Round Early</button>}
+      {phase==="roundDone"&&(
+        <div>
+          <div style={{marginBottom:"10px"}}>
+            <div style={{fontSize:"10px",color:"#555",letterSpacing:"2px",textTransform:"uppercase",marginBottom:"7px"}}>Round {currentRound+1} Effort</div>
+            <div style={{display:"flex",gap:"4px"}}>
+              {[1,2,3,4,5,6,7,8,9,10].map(n=>(
+                <button key={n} onClick={()=>updateNote("effort",n)} style={{flex:1,padding:"8px 2px",borderRadius:"5px",border:"none",background:roundNotes[currentRound]?.effort===n?"#f0ede8":"#1a1a1a",color:roundNotes[currentRound]?.effort===n?"#000":"#555",fontSize:"11px",cursor:"pointer"}}>{n}</button>
+              ))}
+            </div>
+          </div>
+          <input value={roundNotes[currentRound]?.note||""} onChange={e=>updateNote("note",e.target.value)} placeholder="One word on this round..." style={{width:"100%",background:"#111",border:"1px solid #222",borderRadius:"8px",padding:"9px",color:"#f0ede8",fontSize:"13px",outline:"none",marginBottom:"10px",boxSizing:"border-box"}}/>
+          <button onClick={startRest} style={{width:"100%",padding:"13px",background:"#60a080",border:"none",borderRadius:"10px",color:"#000",fontSize:"12px",letterSpacing:"3px",textTransform:"uppercase",cursor:"pointer"}}>Rest</button>
+        </div>
+      )}
+      {phase==="nextReady"&&<button onClick={nextRound} style={{width:"100%",padding:"15px",background:"#cc4444",border:"none",borderRadius:"10px",color:"#fff",fontSize:"13px",letterSpacing:"3px",textTransform:"uppercase",cursor:"pointer"}}>Round {currentRound+2}</button>}
+      {phase==="rest"&&<button onClick={()=>{clearInterval(timerRef.current);setPhase("nextReady");}} style={{width:"100%",padding:"13px",background:"#1a1a1a",border:"1px solid #333",borderRadius:"10px",color:"#888",fontSize:"12px",cursor:"pointer"}}>Skip Rest</button>}
+    </div>
+  );
+}
+
+function App(){
+  const[screen,setScreen]=useState("today");
+  const[activeWorkout,setActiveWorkout]=useState(null);
+  const[morningQuote]=useState(MORNING_QUOTES[Math.floor(Math.random()*MORNING_QUOTES.length)]);
+  const[gogginsQuote]=useState(GOGGINS_QUOTES[Math.floor(Math.random()*GOGGINS_QUOTES.length)]);
+  const[todayLog,setTodayLog]=useState({});
+  const[missReasons,setMissReasons]=useState({});
+  const[showMissReason,setShowMissReason]=useState(null);
+  const[weight,setWeight]=useState("");
+  const[waist,setWaist]=useState("");
+  const[allLogs,setAllLogs]=useState({});
+  const[sessionHistory,setSessionHistory]=useState([]);
+  const[totalXP,setTotalXP]=useState(0);
+  const[streak,setStreak]=useState(0);
+  const[reviewText,setReviewText]=useState("");
+  const[reviewLoading,setReviewLoading]=useState(false);
+  const[saved,setSaved]=useState(false);
+  const[xpAnim,setXpAnim]=useState(null);
+  const[loopClosed,setLoopClosed]=useState(false);
+  const todayKey=getTodayKey();
+  const dow=new Date().getDay();
+  const todayHabits=getHabitsForDay(dow);
+  const todayWorkouts=PROGRAM_WORKOUTS.filter(w=>w.days.includes(dow));
+  const currentRank=getRankForXP(totalXP);
+  const todayDone=Object.values(todayLog).filter(Boolean).length;
+  const todayScore=Math.round((todayDone/todayHabits.length)*100);
+  const scoreColor=todayScore>=80?"#00ff87":todayScore>=50?"#ffd700":"#ff4444";
+  useEffect(()=>{loadData();},[]);
+  async function loadData(){
+    try{
+      const lr=await storage.get("ace_all_logs");
+      const xr=await storage.get("ace_total_xp");
+      const sr=await storage.get("ace_sessions");
+      if(lr){const logs=JSON.parse(lr.value);setAllLogs(logs);if(logs[todayKey]){setTodayLog(logs[todayKey].habits||{});setMissReasons(logs[todayKey].reasons||{});setWeight(logs[todayKey].weight||"");setWaist(logs[todayKey].waist||"");setLoopClosed(logs[todayKey].closed||false);}calcStreak(logs);}
+      if(xr)setTotalXP(parseInt(xr.value,10)||0);
+      if(sr)setSessionHistory(JSON.parse(sr.value)||[]);
+    }catch(e){console.error(e);}
+  }
+  function calcStreak(logs){
+    let s=0;const today=new Date();
+    for(let i=0;i<90;i++){const d=new Date(today);d.setDate(today.getDate()-i);const key=d.toISOString().split("T")[0];if(logs[key]?.closed)s++;else if(i>0)break;}
+    setStreak(s);
+  }
+  async function saveDay(close=false){
+    const{earned,mult}=calcXP(todayHabits,todayLog,streak);
+    const updated={...allLogs,[todayKey]:{habits:todayLog,reasons:missReasons,weight,waist,closed:close,xpEarned:earned,savedAt:new Date().toISOString()}};
+    let newXP=totalXP;
+    if(close&&!allLogs[todayKey]?.closed){newXP=Math.max(0,totalXP+earned);setTotalXP(newXP);setXpAnim("+"+earned+" XP"+(mult>1?" ("+mult+"x streak!)":""));setTimeout(()=>setXpAnim(null),3000);await storage.set("ace_total_xp",String(newXP));}
+    await storage.set("ace_all_logs",JSON.stringify(updated));setAllLogs(updated);calcStreak(updated);
+    if(close)setLoopClosed(true);setSaved(true);setTimeout(()=>setSaved(false),2000);
+  }
+  async function saveSession(session){
+    const updated=[session,...sessionHistory].slice(0,200);
+    setSessionHistory(updated);await storage.set("ace_sessions",JSON.stringify(updated));
+    setActiveWorkout(null);setScreen("today");
+    const hid=session.workout.type==="boxing"?"boxing":"workout";
+    setTodayLog(p=>({...p,[hid]:true}));
+  }
+  function toggleHabit(id){
+    const val=!todayLog[id];setTodayLog({...todayLog,[id]:val});
+    if(!val)setShowMissReason(id);else{const r={...missReasons};delete r[id];setMissReasons(r);}
+  }
+  function getLastSession(wid){return sessionHistory.find(s=>s.workout.id===wid);}
+  async function getAIReview(){
+    setReviewLoading(true);setReviewText("");
+    const weekData=getWeekKeys().map(k=>({date:k,score:(()=>{const l=allLogs[k];if(!l?.habits)return 0;return Math.round((Object.values(l.habits).filter(Boolean).length/getHabitsForDay(new Date(k+"T12:00:00").getDay()).length)*100);})(),weight:allLogs[k]?.weight||null,closed:allLogs[k]?.closed||false}));
+    const strengthSummary=Object.entries(STRENGTH_HISTORY).map(([name,h])=>name+": started "+h.first.weight+"lb, peak "+h.peak.weight+"lb, current "+h.current+"lb").join(", ");
+    const prompt="You are a sharp performance coach for Andrew. He is on a 6-month cut from ~225 lbs to 180-190 lbs. Boxing Mon/Wed/Fri, Lifting Tue/Thu/Sat. Current rank: "+currentRank.title+". Total XP: "+totalXP+". Streak: "+streak+" days. Strength baseline: "+strengthSummary+". Last 7 days: "+JSON.stringify(weekData)+". Recent sessions: "+JSON.stringify(sessionHistory.slice(0,5).map(s=>({date:s.date,workout:s.workout.name,effort:s.effort||s.avgEffort,note:s.note})))+". Write a sharp performance review under 200 words. Be a coach not a cheerleader. Cover: strength trajectory vs peak, what is consistent, what is slipping, ONE thing to fix, one-liner closer. Talk directly to Andrew.";
+    try{
+      const response=await fetch("https://api.anthropic.com/v1/messages",{
+        method:"POST",
+        headers:{"content-type":"application/json","x-api-key":"","anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+        body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages:[{role:"user",content:prompt}]}),
+      });
+      const data=await response.json();
+      const textBlock=data.content&&data.content.find(b=>b.type==="text");
+      if(textBlock){setReviewText(textBlock.text);}
+      else if(data.error){setReviewText("API error: "+data.error.message);}
+      else{setReviewText("No response. Try again.");}
+    }catch(e){setReviewText("Error: "+e.message);}
+    setReviewLoading(false);
+  }
+  if(activeWorkout){
+    if(activeWorkout.type==="lift")return <LiftSession workout={activeWorkout} onComplete={saveSession} onBack={()=>setActiveWorkout(null)}/>;
+    if(activeWorkout.type==="boxing")return <BoxingSession workout={activeWorkout} onComplete={saveSession} onBack={()=>setActiveWorkout(null)}/>;
+  }
+  return(
+    <div style={{minHeight:"100vh",background:"#080808",color:"#f0ede8",fontFamily:"Georgia,serif",maxWidth:"480px",margin:"0 auto"}}>
+      {xpAnim&&<div className="xp-anim" style={{position:"fixed",top:"80px",left:"50%",background:"#ffd700",color:"#000",padding:"7px 18px",borderRadius:"20px",fontSize:"13px",fontWeight:"bold",zIndex:999}}>{xpAnim}</div>}
+      <div style={{padding:"12px 16px",borderBottom:"1px solid #141414",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,background:"#080808",zIndex:100}}>
+        <div>
+          <div style={{fontSize:"9px",letterSpacing:"4px",color:"#333",textTransform:"uppercase"}}>ACE</div>
+          <div style={{fontSize:"10px",color:"#555",marginTop:"1px"}}>{new Date().toLocaleDateString("en-US",{weekday:"long",month:"short",day:"numeric"})}</div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
+          {streak>0&&<div style={{fontSize:"12px",color:"#ffd700"}}>🔥 {streak}</div>}
+          <div style={{background:"#111",border:"1px solid "+currentRank.glowColor+"33",borderRadius:"14px",padding:"3px 8px",fontSize:"9px",color:currentRank.glowColor}}>{currentRank.emoji} {totalXP} XP</div>
+          <div style={{width:"28px",height:"28px",borderRadius:"50%",background:scoreColor,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"9px",fontWeight:"bold",color:"#000"}}>{todayScore}</div>
+        </div>
+      </div>
+      <div style={{display:"flex",borderBottom:"1px solid #141414",background:"#0a0a0a"}}>
+        {[{id:"today",label:"Today"},{id:"train",label:"Train"},{id:"log",label:"Log"},{id:"review",label:"Review"}].map(tab=>(
+          <button key={tab.id} onClick={()=>setScreen(tab.id)} style={{flex:1,padding:"10px",background:"none",border:"none",borderBottom:screen===tab.id?"2px solid "+currentRank.glowColor:"2px solid transparent",color:screen===tab.id?"#f0ede8":"#444",fontSize:"10px",letterSpacing:"2px",textTransform:"uppercase",cursor:"pointer",transition:"all 0.2s"}}>{tab.label}</button>
+        ))}
+      </div>
+      {screen==="today"&&(
+        <div style={{padding:"18px 16px"}}>
+          <div style={{borderLeft:"2px solid "+currentRank.glowColor+"33",paddingLeft:"12px",marginBottom:"18px"}}>
+            <div style={{fontSize:"13px",lineHeight:"1.65",color:"#777",fontStyle:"italic"}}>"{morningQuote}"</div>
+          </div>
+          <RankCarousel xp={totalXP}/>
+          <div style={{background:"#111",border:"1px solid #1a1a1a",borderRadius:"12px",padding:"12px",marginBottom:"18px",display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"10px",textAlign:"center"}}>
+            {[
+              {val:sessionHistory.filter(s=>(new Date()-new Date(s.date))/(1000*60*60*24)<=7).length,label:"Sessions\nThis Week",color:"#f0ede8"},
+              {val:Math.round((getWeekKeys().filter(k=>allLogs[k]?.closed).length/7)*100)+"%",label:"7-Day\nConsistency",color:"#00ff87"},
+              {val:weight||"-",label:"Weight\n(lbs)",color:"#f0ede8"},
+            ].map((s,i)=>(
+              <div key={i}>
+                <div style={{fontSize:"20px",fontWeight:"bold",color:s.color,lineHeight:1}}>{s.val}</div>
+                <div style={{fontSize:"9px",color:"#444",letterSpacing:"1px",textTransform:"uppercase",marginTop:"4px",whiteSpace:"pre-line"}}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+          {todayWorkouts.length>0&&(
+            <div style={{marginBottom:"18px"}}>
+              <div style={{fontSize:"9px",letterSpacing:"3px",color:"#444",textTransform:"uppercase",marginBottom:"10px"}}>Today's Sessions</div>
+              {todayWorkouts.map(w=>{const last=getLastSession(w.id);return(
+                <div key={w.id} onClick={()=>setActiveWorkout(w)} style={{background:"#111",border:"1px solid #1a1a1a",borderRadius:"10px",padding:"12px 14px",marginBottom:"7px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div>
+                    <div style={{fontSize:"13px",color:"#f0ede8"}}>{w.emoji} {w.name}</div>
+                    {last&&<div style={{fontSize:"9px",color:"#444",marginTop:"2px"}}>Last: {last.date} - Effort {last.effort||last.avgEffort}/10</div>}
+                  </div>
+                  <div style={{fontSize:"18px",color:"#333"}}>›</div>
+                </div>
+              );})}
+            </div>
+          )}
+          <div style={{background:"#111",border:"1px solid #1a1a1a",borderRadius:"12px",padding:"14px"}}>
+            <div style={{fontSize:"9px",letterSpacing:"3px",color:"#444",textTransform:"uppercase",marginBottom:"10px"}}>Body Metrics</div>
+            <div style={{display:"flex",gap:"10px",marginBottom:"9px"}}>
+              {[{label:"Weight (lbs)",val:weight,set:setWeight,ph:"225"},{label:"Waist (in)",val:waist,set:setWaist,ph:"38"}].map(f=>(
+                <div key={f.label} style={{flex:1}}>
+                  <div style={{fontSize:"9px",color:"#444",marginBottom:"4px"}}>{f.label}</div>
+                  <input type="number" value={f.val} onChange={e=>f.set(e.target.value)} placeholder={f.ph} style={{width:"100%",background:"#161616",border:"1px solid #222",borderRadius:"6px",padding:"6px 8px",color:"#f0ede8",fontSize:"13px",outline:"none",boxSizing:"border-box"}}/>
+                </div>
+              ))}
+            </div>
+            <button onClick={()=>saveDay(false)} style={{width:"100%",padding:"7px",background:"#161616",border:"1px solid #222",borderRadius:"6px",color:saved?"#00ff87":"#444",fontSize:"10px",letterSpacing:"2px",textTransform:"uppercase",cursor:"pointer"}}>{saved?"Saved":"Save Metrics"}</button>
+          </div>
+        </div>
+      )}
+      {screen==="train"&&(
+        <div style={{padding:"18px 16px"}}>
+          <div style={{fontSize:"9px",letterSpacing:"3px",color:"#444",textTransform:"uppercase",marginBottom:"14px"}}>All Workouts</div>
+          {PROGRAM_WORKOUTS.map(w=>{
+            const last=getLastSession(w.id);
+            const dayNames=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+            return(
+              <div key={w.id} style={{background:"#111",border:"1px solid #1a1a1a",borderRadius:"12px",padding:"14px",marginBottom:"9px"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"8px"}}>
+                  <div>
+                    <div style={{fontSize:"14px",color:"#f0ede8"}}>{w.emoji} {w.name}</div>
+                    <div style={{fontSize:"9px",color:"#444",marginTop:"2px"}}>{w.days.map(d=>dayNames[d]).join(", ")}</div>
+                  </div>
+                  {last&&<div style={{fontSize:"9px",color:"#555",textAlign:"right"}}>Last: {last.date}<br/>Effort {last.effort||last.avgEffort}/10</div>}
+                </div>
+                {w.type==="lift"&&(
+                  <div style={{marginBottom:"10px"}}>
+                    {w.exercises.map(ex=>{const hist=STRENGTH_HISTORY[ex.name];return(
+                      <div key={ex.id} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:"1px solid #161616"}}>
+                        <span style={{fontSize:"11px",color:"#666"}}>{ex.name.split("(")[0].trim().slice(0,22)}</span>
+                        <div style={{textAlign:"right"}}>
+                          <span style={{fontSize:"11px",color:"#444"}}>{ex.sets}x{ex.targetReps} - {ex.lastWeight>0?ex.lastWeight+"lb":"BW"}</span>
+                          {hist&&<span style={{fontSize:"9px",color:"#333",display:"block"}}>peak {hist.peak.weight}lb</span>}
+                        </div>
+                      </div>
+                    );})}
+                  </div>
+                )}
+                {w.type==="boxing"&&<div style={{fontSize:"11px",color:"#555",marginBottom:"10px"}}>{w.rounds} rounds - {fmtTime(w.workTime)} work / {fmtTime(w.restTime)} rest</div>}
+                <button onClick={()=>setActiveWorkout(w)} style={{width:"100%",padding:"9px",background:"#161616",border:"1px solid #222",borderRadius:"8px",color:"#f0ede8",fontSize:"10px",letterSpacing:"2px",textTransform:"uppercase",cursor:"pointer"}}>Start Session</button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {screen==="log"&&(
+        <div style={{padding:"16px"}}>
+          <div style={{background:"#0d0000",border:"1px solid #2a0000",borderRadius:"10px",padding:"11px 13px",marginBottom:"16px"}}>
+            <div style={{fontSize:"12px",color:"#cc3333",lineHeight:"1.55",fontStyle:"italic"}}>"{gogginsQuote}"</div>
+          </div>
+          {todayHabits.map(habit=>(
+            <div key={habit.id}>
+              <div onClick={()=>toggleHabit(habit.id)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 0",borderBottom:"1px solid #111",cursor:"pointer"}}>
+                <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
+                  <span style={{fontSize:"16px"}}>{habit.icon}</span>
+                  <div>
+                    <div style={{fontSize:"13px",color:todayLog[habit.id]?"#f0ede8":"#555"}}>{habit.label}</div>
+                    <div style={{fontSize:"9px",color:"#2a2a2a",marginTop:"1px"}}>+{habit.xp} XP</div>
+                  </div>
+                </div>
+                <div style={{width:"20px",height:"20px",borderRadius:"50%",border:todayLog[habit.id]?"none":"1px solid #2a2a2a",background:todayLog[habit.id]?"#00ff87":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.2s"}}>
+                  {todayLog[habit.id]&&<span style={{fontSize:"10px",color:"#000"}}>✓</span>}
+                </div>
+              </div>
+              {showMissReason===habit.id&&(
+                <div style={{background:"#0d0d0d",border:"1px solid #1a1a1a",borderRadius:"8px",padding:"9px",margin:"4px 0"}}>
+                  <div style={{fontSize:"9px",color:"#444",letterSpacing:"2px",textTransform:"uppercase",marginBottom:"6px"}}>Why did you miss this?</div>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:"5px"}}>
+                    {MISS_REASONS.map(r=>(
+                      <button key={r} onClick={()=>{setMissReasons({...missReasons,[habit.id]:r});setShowMissReason(null);}} style={{background:"#161616",border:"1px solid #222",borderRadius:"14px",padding:"4px 9px",color:"#666",fontSize:"11px",cursor:"pointer"}}>{r}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {missReasons[habit.id]&&!todayLog[habit.id]&&<div style={{padding:"2px 0 4px 26px",fontSize:"9px",color:"#333"}}>- {missReasons[habit.id]}</div>}
+            </div>
+          ))}
+          {(()=>{const{earned,missed,mult}=calcXP(todayHabits,todayLog,streak);return(
+            <div style={{marginTop:"16px",background:"#111",border:"1px solid #1a1a1a",borderRadius:"12px",padding:"13px",textAlign:"center"}}>
+              <div style={{fontSize:"28px",fontWeight:"bold",color:scoreColor}}>{todayScore}%</div>
+              <div style={{fontSize:"10px",color:"#444",marginTop:"3px"}}>{todayDone} of {todayHabits.length} complete</div>
+              <div style={{marginTop:"7px",fontSize:"11px",color:"#555"}}>Close now: <span style={{color:"#ffd700"}}>+{earned} XP</span>{mult>1&&<span style={{color:"#ffd700"}}> ({mult}x)</span>}{missed>=2&&<span style={{color:"#ff4444"}}> - {missed} misses</span>}</div>
+            </div>
+          );})()}
+          <button onClick={()=>{saveDay(true);setScreen("today");}} disabled={loopClosed} style={{marginTop:"11px",width:"100%",padding:"13px",background:loopClosed?"#111":todayScore===100?"#00ff87":"#161616",border:"1px solid "+(loopClosed?"#1a1a1a":todayScore===100?"#00ff87":"#2a2a2a"),borderRadius:"10px",color:loopClosed?"#333":todayScore===100?"#000":"#666",fontSize:"10px",letterSpacing:"3px",textTransform:"uppercase",cursor:loopClosed?"not-allowed":"pointer"}}>
+            {loopClosed?"Loop Already Closed":todayScore===100?"Lock It In":"Close Today's Loop"}
+          </button>
+        </div>
+      )}
+      {screen==="review"&&(
+        <div style={{padding:"16px"}}>
+          <div style={{marginBottom:"18px"}}>
+            <div style={{fontSize:"9px",letterSpacing:"3px",color:"#444",textTransform:"uppercase",marginBottom:"10px"}}>Last 7 Days</div>
+            <div style={{display:"flex",gap:"4px"}}>
+              {getWeekKeys().map(key=>{
+                const log=allLogs[key];
+                const score=log?.habits?Math.round((Object.values(log.habits).filter(Boolean).length/getHabitsForDay(new Date(key+"T12:00:00").getDay()).length)*100):0;
+                const isToday=key===todayKey;
+                const bg=score>=80?"#00ff87":score>=50?"#ffd700":score>0?"#ff4444":"#111";
+                return(
+                  <div key={key} style={{flex:1,textAlign:"center"}}>
+                    <div style={{height:"40px",background:bg,borderRadius:"5px",border:isToday?"2px solid #f0ede8":"none",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"9px",fontWeight:"bold",color:score>0?"#000":"#222"}}>{score>0?score:"-"}</div>
+                    <div style={{fontSize:"8px",color:"#333",marginTop:"2px"}}>{new Date(key+"T12:00:00").toLocaleDateString("en-US",{weekday:"short"})}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div style={{background:"#111",border:"1px solid #1a1a1a",borderRadius:"12px",padding:"14px",marginBottom:"14px"}}>
+            <div style={{fontSize:"9px",letterSpacing:"3px",color:"#444",textTransform:"uppercase",marginBottom:"12px"}}>Strength Snapshot</div>
+            {Object.entries(STRENGTH_HISTORY).slice(0,4).map(([name,h])=>{
+              const pct=Math.min(100,(h.current/h.peak.weight)*100);
+              return(
+                <div key={name} style={{marginBottom:"10px"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:"3px"}}>
+                    <span style={{fontSize:"11px",color:"#888"}}>{name.split("(")[0].trim()}</span>
+                    <span style={{fontSize:"11px",color:"#f0ede8"}}>{h.current}lb <span style={{color:"#444",fontSize:"10px"}}>/ {h.peak.weight} peak</span></span>
+                  </div>
+                  <div style={{height:"3px",background:"#1a1a1a",borderRadius:"2px",overflow:"hidden"}}>
+                    <div style={{height:"100%",width:pct+"%",background:pct>=90?"#00ff87":pct>=70?"#ffd700":"#6080c0",borderRadius:"2px"}}/>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{background:"#111",border:"1px solid #1a1a1a",borderRadius:"12px",padding:"14px",marginBottom:"14px"}}>
+            <div style={{fontSize:"9px",letterSpacing:"3px",color:"#444",textTransform:"uppercase",marginBottom:"10px"}}>Weight Trend</div>
+            {getWeekKeys().filter(k=>allLogs[k]?.weight).length===0?(
+              <div style={{fontSize:"12px",color:"#2a2a2a",textAlign:"center",padding:"12px 0"}}>No weight data yet</div>
+            ):(
+              getWeekKeys().filter(k=>allLogs[k]?.weight).map((key,i,arr)=>{
+                const prev=i>0?parseFloat(allLogs[arr[i-1]]?.weight):null;
+                const curr=parseFloat(allLogs[key].weight);
+                const delta=prev?(curr-prev).toFixed(1):null;
+                return(
+                  <div key={key} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid #111"}}>
+                    <span style={{fontSize:"10px",color:"#444"}}>{new Date(key+"T12:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"})}</span>
+                    <div style={{display:"flex",alignItems:"center",gap:"7px"}}>
+                      {delta&&<span style={{fontSize:"10px",color:parseFloat(delta)<0?"#00ff87":"#ff4444"}}>{parseFloat(delta)<=0?"":"+"}{delta}</span>}
+                      <span style={{fontSize:"13px",color:"#f0ede8"}}>{allLogs[key].weight} lbs</span>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+          <div style={{background:"#111",border:"1px solid #1a1a1a",borderRadius:"12px",padding:"14px",marginBottom:"14px"}}>
+            <div style={{fontSize:"9px",letterSpacing:"3px",color:"#444",textTransform:"uppercase",marginBottom:"10px"}}>Recent Sessions</div>
+            {sessionHistory.length===0?(
+              <div style={{fontSize:"12px",color:"#2a2a2a",textAlign:"center",padding:"12px 0"}}>No sessions logged yet</div>
+            ):(
+              sessionHistory.slice(0,5).map((s,i)=>(
+                <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #111"}}>
+                  <div>
+                    <div style={{fontSize:"12px",color:"#c8c4be"}}>{s.workout.type==="boxing"?"🥊":"🏋️"} {s.workout.name}</div>
+                    <div style={{fontSize:"9px",color:"#444",marginTop:"1px"}}>{s.date} - {fmtTime(s.duration)}</div>
+                  </div>
+                  <div style={{fontSize:"13px",color:"#ffd700"}}>{s.effort||s.avgEffort}/10</div>
+                </div>
+              ))
+            )}
+          </div>
+          <div style={{background:"#111",border:"1px solid #1a1a1a",borderRadius:"12px",padding:"14px"}}>
+            <div style={{fontSize:"9px",letterSpacing:"3px",color:"#444",textTransform:"uppercase",marginBottom:"10px"}}>Coach Review</div>
+            {reviewText?(
+              <div style={{fontSize:"13px",lineHeight:"1.7",color:"#a0a0a0",whiteSpace:"pre-wrap",marginBottom:"13px"}}>{reviewText}</div>
+            ):(
+              <div style={{fontSize:"12px",color:"#333",marginBottom:"13px",lineHeight:"1.6"}}>Your coach reads your strength history, last 7 days, and recent sessions.</div>
+            )}
+            <button onClick={getAIReview} disabled={reviewLoading} style={{width:"100%",padding:"11px",background:reviewLoading?"#111":"#f0ede8",border:"none",borderRadius:"8px",color:reviewLoading?"#333":"#000",fontSize:"10px",letterSpacing:"3px",textTransform:"uppercase",cursor:reviewLoading?"not-allowed":"pointer"}}>
+              {reviewLoading?"Analyzing...":reviewText?"Refresh Review":"Get My Review"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
